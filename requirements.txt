@@ -1,5 +1,5 @@
 flask 
 mysql-connector-python
 PyJWT
-functools 
-werkzeug.security
+werkzeug
+razorpay

@@ -1,6 +1,58 @@
 from database.connection import databaseConfig
 
 
+def normalize_user_row(row):
+    if not row:
+        return row
+
+    normalized = dict(row)
+
+    user_id = (
+        normalized.get('user_id')
+        or normalized.get('USER_ID')
+        or normalized.get('USERID')
+        or normalized.get('userid')
+    )
+    if user_id is not None:
+        normalized['user_id'] = user_id
+        normalized['USER_ID'] = user_id
+        normalized['USERID'] = user_id
+        normalized['userid'] = user_id
+
+    name = normalized.get('name') or normalized.get('NAME')
+    if name is not None:
+        normalized['name'] = name
+        normalized['NAME'] = name
+
+    email = normalized.get('email') or normalized.get('EMAIL')
+    if email is not None:
+        normalized['email'] = email
+        normalized['EMAIL'] = email
+
+    phone = normalized.get('phone_number') or normalized.get('PHONE_NUMBER') or normalized.get('phone')
+    if phone is not None:
+        normalized['phone_number'] = phone
+        normalized['PHONE_NUMBER'] = phone
+        normalized['phone'] = phone
+
+    password = normalized.get('password') or normalized.get('PASSWORD')
+    if password is not None:
+        normalized['password'] = password
+        normalized['PASSWORD'] = password
+
+    role = normalized.get('role') or normalized.get('ROLE')
+    if role is not None:
+        normalized['role'] = role
+        normalized['ROLE'] = role
+
+    profile_image = normalized.get('profile_image') or normalized.get('PROFILE_IMAGE')
+    if profile_image is not None:
+        normalized['profile_image'] = profile_image
+        normalized['PROFILE_IMAGE'] = profile_image
+
+    return normalized
+
+
 # check user exists or not
 def checkUserExists(email:str):
     # database accesss
@@ -49,7 +101,7 @@ def getUserDetails(email:str, role:str=None):
     data = cursor.fetchone()
     cursor.close()
     db_config.close()
-    return data
+    return normalize_user_row(data)
 
 # get user details by id
 def getUserDetailsByID(user_id:int, role:str=None):
@@ -62,7 +114,30 @@ def getUserDetailsByID(user_id:int, role:str=None):
     user = cursor.fetchone()
     cursor.close()
     db_config.close()
-    return user
+    return normalize_user_row(user)
+
+
+def getOrderById(order_id:int):
+    db = databaseConfig()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM ORDERS WHERE ORDERID = %s", (order_id,))
+    order = cursor.fetchone()
+    cursor.close()
+    db.close()
+    return order
+
+
+def getOrderItemsByOrderId(order_id:int):
+    db = databaseConfig()
+    cursor = db.cursor(dictionary=True)
+    cursor.execute(
+        "SELECT * FROM ORDER_ITEMS WHERE ORDERID = %s ORDER BY ID ASC",
+        (order_id,)
+    )
+    items = cursor.fetchall()
+    cursor.close()
+    db.close()
+    return items
 
 
 ## Get all categories from database
@@ -236,18 +311,42 @@ def usersDetails(name:str="", email:str="",role:str=''):
     return users
 
 
-# update admin profile in database
-def updateAdminProfile(new_password:str,user_id:int):
+# update admin/user profile in database
+def updateAdminProfile(user_id:int=None, new_password:str=None, name:str=None, phone:str=None, email:str=None):
     db = databaseConfig()
     cursor = db.cursor(dictionary=True)
-    cursor.execute("""
-            UPDATE USERS
-            SET PASSWORD=%s
-            WHERE USER_ID=%s
-        """, (new_password, user_id))
+
+    fields = []
+    values = []
+
+    if new_password is not None:
+        fields.append("PASSWORD = %s")
+        values.append(new_password)
+
+    if name is not None:
+        fields.append("NAME = %s")
+        values.append(name)
+
+    if phone is not None:
+        fields.append("PHONE_NUMBER = %s")
+        values.append(phone)
+
+    if email is not None:
+        fields.append("EMAIL = %s")
+        values.append(email)
+
+    if not fields or user_id is None:
+        cursor.close()
+        db.close()
+        return False
+
+    values.append(user_id)
+    query = f"UPDATE USERS SET {', '.join(fields)} WHERE USER_ID = %s"
+    cursor.execute(query, tuple(values))
     db.commit()
     cursor.close()
     db.close()
+    return True
 
 
 
@@ -309,6 +408,37 @@ def viewUserByAdmin(user_id):
     db.close()
     return user
 
+
+def markOrderPaymentFailure(order_id:int, reason:str=None):
+    db = databaseConfig()
+    cursor = db.cursor()
+    cursor.execute(
+        "UPDATE ORDERS SET PAYMENT_STATUS = 'FAILED', ORDERSTATUS = 'FAILED', PAYMENT_FAILURE_REASON = %s WHERE ORDERID = %s",
+        (reason, order_id)
+    )
+    db.commit()
+    cursor.close()
+    db.close()
+
+
+def updateOrderPaymentStatus(order_id:int, payment_status:str, razorpay_order_id:str=None, razorpay_payment_id:str=None,
+                            razorpay_signature:str=None, payment_id:str=None, payment_method:str='RAZORPAY'):
+    db = databaseConfig()
+    cursor = db.cursor()
+    query = """
+        UPDATE ORDERS
+        SET PAYMENT_STATUS = %s,
+            PAYMENT_METHOD = %s,
+            RAZORPAY_ORDER_ID = COALESCE(%s, RAZORPAY_ORDER_ID),
+            RAZORPAY_PAYMENT_ID = COALESCE(%s, RAZORPAY_PAYMENT_ID),
+            RAZORPAY_SIGNATURE = COALESCE(%s, RAZORPAY_SIGNATURE),
+            PAYMENT_ID = COALESCE(%s, PAYMENT_ID)
+        WHERE ORDERID = %s
+    """
+    cursor.execute(query, (payment_status, payment_method, razorpay_order_id, razorpay_payment_id, razorpay_signature, payment_id, order_id))
+    db.commit()
+    cursor.close()
+    db.close()
 
 
 # view order

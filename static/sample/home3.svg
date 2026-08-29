@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Home decor image 3">
+  <rect width="200" height="200" fill="#f5f3ff"/>
+  <rect x="46" y="80" width="108" height="64" rx="16" fill="#c4b5fd"/>
+  <circle cx="78" cy="96" r="18" fill="#e9d5ff"/>
+  <circle cx="122" cy="96" r="18" fill="#ddd6fe"/>
+  <text x="100" y="172" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#4c1d95">Decor</text>
+</svg>

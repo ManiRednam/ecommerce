@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, make_response,flash
+from flask import Flask, render_template, redirect, url_for, request, make_response, flash, jsonify
 
 import jwt
 from datetime import datetime, timedelta, timezone
@@ -14,9 +14,14 @@ from database.tables import createTables
 from database.utility import checkUserExists, addUser, getUserDetails, getCatagoriesFromDB, getProductsFromDB
 from database.utility import addProductToDB, totalOrdersCount, getOrders, usersDetails, getUserDetailsByID, updateAdminProfile
 from database.utility import getProductDetailsByID, updateProductInfo, updateProductStatus, viewUserByAdmin, viewOrderDetails, totalProducts
+from database.utility import getOrderById, updateOrderPaymentStatus, markOrderPaymentFailure
+from database.userutility import createPendingOrder, finalizePaidOrder
+from services.razorpay_service import create_payment_order, verify_payment_signature
+
+from database.connection import ensure_database_exists
 
 app = Flask(__name__)
-app.config['SECRET_KEY'] = "srinubabu@123"
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
 
 
 
@@ -31,6 +36,7 @@ def token_required(role=None):
             token = request.cookies.get('token')
 
             if not token:
+                flash('Please login to continue.', 'danger')
                 return redirect(url_for('login'))
 
             try:
@@ -40,12 +46,16 @@ def token_required(role=None):
                     algorithms=["HS256"]
                 )
             except jwt.ExpiredSignatureError:
+                flash('Your session has expired. Please login again.', 'warning')
                 return redirect(url_for('login'))
             except jwt.InvalidTokenError:
+                flash('Invalid session. Please login again.', 'warning')
                 return redirect(url_for('login'))
 
-            if role and data['role'] != role:
-                return "Unauthorized access"
+            user_role = (data.get('role') or '').lower()
+            if role and user_role != role.lower():
+                flash('Unauthorized access.', 'danger')
+                return redirect(url_for('login'))
 
             return f(*args, **kwargs)
         return decorated
@@ -66,9 +76,32 @@ def getUserByToken():
         )
 
         user_id = data.get('user_id')
-        role = data.get('role')
-
         user = getUserDetailsByID(user_id=user_id)
+
+        if not user:
+            return None
+
+        user['USER_ID'] = user.get('USER_ID') or user.get('user_id')
+        user['USERID'] = user['USER_ID']
+        user['userid'] = user['USER_ID']
+
+        user['ROLE'] = user.get('ROLE') or user.get('role')
+        user['role'] = user['ROLE']
+
+        user['NAME'] = user.get('NAME') or user.get('name')
+        user['name'] = user['NAME']
+
+        user['EMAIL'] = user.get('EMAIL') or user.get('email')
+        user['email'] = user['EMAIL']
+
+        user['PHONE_NUMBER'] = user.get('PHONE_NUMBER') or user.get('phone_number') or user.get('phone')
+        user['phone'] = user['PHONE_NUMBER']
+
+        user['PASSWORD'] = user.get('PASSWORD') or user.get('password')
+        user['password'] = user['PASSWORD']
+
+        user['PROFILE_IMAGE'] = user.get('PROFILE_IMAGE') or user.get('profile_image')
+        user['profile_image'] = user['PROFILE_IMAGE']
 
         return user
 
@@ -469,26 +502,28 @@ def adminprofile():
 
 
 @app.route('/admin/change-password', methods=['POST'])
+@token_required(role='admin')
 def admin_change_password():
     user = getUserByToken()
-
-    if not user or user['ROLE'] != 'admin':
+    if not user:
+        flash('Please login to update your password.', 'warning')
         return redirect(url_for('login'))
 
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
 
-    # Verify current password
+    if not current_password or not new_password:
+        flash('Current password and new password are required.', 'danger')
+        return redirect(url_for('adminprofile'))
+
     if not check_password_hash(user['PASSWORD'], current_password):
-        return redirect(url_for('admin_profile'))
+        flash('Current password is incorrect.', 'danger')
+        return redirect(url_for('adminprofile'))
 
     hashed_password = generate_password_hash(new_password)
-
-    
-    # update admin profile in database
-    updateAdminProfile(new_password=hashed_password, user_id=user['PASSWORD'])
-
-    return redirect(url_for('admin_profile'))
+    updateAdminProfile(user_id=user['USERID'], new_password=hashed_password)
+    flash('Password updated successfully.', 'success')
+    return redirect(url_for('adminprofile'))
 
 
 
@@ -528,7 +563,18 @@ def getDataFromToken():
             app.config['SECRET_KEY'],
             algorithms=["HS256"]
         )
-        return data
+        normalized = dict(data)
+        user_id = normalized.get('user_id') or normalized.get('USER_ID') or normalized.get('USERID')
+        if user_id is not None:
+            normalized['user_id'] = user_id
+            normalized['USER_ID'] = user_id
+            normalized['USERID'] = user_id
+            normalized['userid'] = user_id
+        role = normalized.get('role') or normalized.get('ROLE')
+        if role is not None:
+            normalized['role'] = role
+            normalized['ROLE'] = role
+        return normalized
     except jwt.ExpiredSignatureError:
         return redirect(url_for('login'))
     except jwt.InvalidTokenError:
@@ -740,17 +786,154 @@ def place_order():
     address = request.form['address']
     city = request.form['city']
     pincode = request.form['pincode']
+    payment_method = request.form.get('payment_method', 'COD').upper()
 
-    status, msg = placeOrder(user['USERID'], fullname, phone, address, city, pincode, total_amount, cart_items)
+    if payment_method == 'RAZORPAY':
+        payment_method = 'RAZORPAY'
+
+    status, msg = placeOrder(user['USERID'], fullname, phone, address, city, pincode, total_amount, cart_items, payment_method)
     if not status:
         flash(message=msg)
         return redirect(url_for('view_cart'))
-    
-    msg =  """
+
+    msg = """
         🎉 Order Placed Successfully!
     """
     flash(msg)
     return redirect(url_for('user'))
+
+
+@app.route('/user/create-razorpay-order', methods=['POST'])
+@token_required(role='user')
+def create_razorpay_order_route():
+    user = getUserByToken()
+    if not user:
+        return jsonify({'error': 'User not authenticated'}), 401
+
+    fullname = request.form.get('fullname')
+    phone = request.form.get('phone')
+    address = request.form.get('address')
+    city = request.form.get('city')
+    pincode = request.form.get('pincode')
+
+    if not all([fullname, phone, address, city, pincode]):
+        return jsonify({'error': 'Shipping information is required'}), 400
+
+    total_amount, cart_items = getCartItems(user['USERID'])
+    if not cart_items:
+        return jsonify({'error': 'Your cart is empty'}), 400
+
+    try:
+        order_id = createPendingOrder(
+            user_id=user['USERID'],
+            fullname=fullname,
+            phone=phone,
+            address=address,
+            city=city,
+            pincode=pincode,
+            total_amount=total_amount,
+            cart_items=cart_items,
+            payment_method='RAZORPAY'
+        )
+
+        payment_order = create_payment_order(
+            amount=float(total_amount),
+            receipt=str(order_id),
+            notes={'user_id': str(user['USERID']), 'order_id': str(order_id)}
+        )
+
+        updateOrderPaymentStatus(
+            order_id=order_id,
+            payment_status='PENDING',
+            razorpay_order_id=payment_order.get('id'),
+            payment_method='RAZORPAY'
+        )
+
+        return jsonify({
+            'order_id': order_id,
+            'razorpay_order_id': payment_order.get('id'),
+            'key': os.getenv('RAZORPAY_KEY_ID'),
+            'amount': int(float(total_amount) * 100),
+            'currency': 'INR',
+            'name': 'Ecommerce',
+            'description': 'Order Payment',
+            'prefill': {
+                'name': fullname,
+                'contact': phone,
+                'email': user.get('EMAIL') or ''
+            }
+        })
+    except Exception as exc:
+        return jsonify({'error': str(exc)}), 500
+
+
+@app.route('/user/payment/verify', methods=['POST'])
+@token_required(role='user')
+def payment_verify():
+    user = getUserByToken()
+    payload = request.get_json(silent=True) or {}
+
+    order_id = payload.get('order_id')
+    razorpay_order_id = payload.get('razorpay_order_id')
+    razorpay_payment_id = payload.get('razorpay_payment_id')
+    razorpay_signature = payload.get('razorpay_signature')
+
+    if not all([order_id, razorpay_order_id, razorpay_payment_id, razorpay_signature]):
+        return jsonify({'error': 'Payment verification data is incomplete'}), 400
+
+    order = getOrderById(order_id)
+    if not order:
+        return jsonify({'error': 'Order not found'}), 404
+    if order['USER_ID'] != user['USERID']:
+        return jsonify({'error': 'Order does not belong to this user'}), 403
+
+    try:
+        is_valid = verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature)
+    except Exception as exc:
+        markOrderPaymentFailure(order_id, str(exc))
+        return jsonify({'error': str(exc)}), 400
+
+    if not is_valid:
+        markOrderPaymentFailure(order_id, 'Invalid Razorpay signature')
+        return jsonify({'error': 'Invalid payment signature'}), 400
+
+    total_amount, cart_items = getCartItems(user['USERID'])
+    status, msg = finalizePaidOrder(order_id, user['USERID'], cart_items)
+    if not status:
+        updateOrderPaymentStatus(order_id, 'FAILED', razorpay_order_id, razorpay_payment_id, razorpay_signature, payment_method='RAZORPAY')
+        return jsonify({'error': msg}), 400
+
+    updateOrderPaymentStatus(
+        order_id=order_id,
+        payment_status='SUCCESS',
+        razorpay_order_id=razorpay_order_id,
+        razorpay_payment_id=razorpay_payment_id,
+        razorpay_signature=razorpay_signature,
+        payment_method='RAZORPAY'
+    )
+
+    return jsonify({'success': True, 'message': 'Payment verified and order completed.'})
+
+
+@app.route('/user/payment/success')
+@token_required(role='user')
+def payment_success():
+    order_id = request.args.get('order_id')
+    return render_template('user/payment_success.html', order_id=order_id)
+
+
+@app.route('/user/payment/failure')
+@token_required(role='user')
+def payment_failure():
+    order_id = request.args.get('order_id')
+    return render_template('user/payment_failure.html', order_id=order_id)
+
+
+@app.route('/user/payment/cancelled')
+@token_required(role='user')
+def payment_cancelled():
+    order_id = request.args.get('order_id')
+    return render_template('user/payment_failure.html', order_id=order_id, cancelled=True)
 
 # @app.route('/user/order-success')
 # @token_required(role='user')
@@ -758,12 +941,17 @@ def place_order():
 #     return
 
 @app.route('/my-orders')
+@token_required(role='user')
 def my_orders():
     user = getUserByToken()
-    name = user.get('NAME','Dear User')
+    if not user:
+        flash('Please login to view your orders.', 'warning')
+        return redirect(url_for('login'))
+
+    name = user.get('NAME', 'Dear User')
     orders = myOrders(user_id=user['USERID'])
-    
-    return render_template("user/my_orders.html", orders=orders,username=name, user_logged_in=True)
+
+    return render_template("user/my_orders.html", orders=orders, username=name, user_logged_in=True)
 
 
 
@@ -771,16 +959,17 @@ def my_orders():
 @app.route('/user/profile', methods=['GET', 'POST'])
 @token_required(role='user')
 def user_profile():
-
-    user = getUserByToken()   # helper → decodes token, returns user data
+    user = getUserByToken()
+    if not user:
+        flash('Please login to view your profile.', 'warning')
+        return redirect(url_for('login'))
 
     if request.method == 'POST':
-
-        name = request.form.get('name')
-        phone = request.form.get('phone')
+        name = request.form.get('name') or user.get('NAME')
+        phone = request.form.get('phone') or user.get('PHONE_NUMBER')
 
         updateAdminProfile(
-            userid=user['userid'],
+            userid=user['USERID'],
             name=name,
             phone=phone
         )
@@ -790,7 +979,9 @@ def user_profile():
 
     return render_template(
         'user/profile.html',
-        user=user
+        user=user,
+        username=user.get('NAME'),
+        user_email=user.get('EMAIL')
     )
 
 
@@ -798,21 +989,25 @@ def user_profile():
 @token_required(role='user')
 def user_change_password():
     user = getUserByToken()
-
-    
+    if not user:
+        flash('Please login to update your password.', 'warning')
+        return redirect(url_for('login'))
 
     current_password = request.form.get('current_password')
     new_password = request.form.get('new_password')
 
-    # Verify current password
+    if not current_password or not new_password:
+        flash('Current password and new password are required.', 'danger')
+        return redirect(url_for('user_profile'))
+
     if not check_password_hash(user['PASSWORD'], current_password):
+        flash('Current password is incorrect.', 'danger')
         return redirect(url_for('user_profile'))
 
     hashed_password = generate_password_hash(new_password)
-
-    
-    # update admin profile in database
-    updateAdminProfile(new_password=hashed_password, user_id=user['PASSWORD'])
+    updateAdminProfile(user_id=user['USERID'], new_password=hashed_password)
+    flash('Password updated successfully.', 'success')
+    return redirect(url_for('user_profile'))
 
     return redirect(url_for('user_profile'))
 @app.route('/user/logout')
@@ -832,11 +1027,12 @@ def user_logout():
 # main
 if __name__ == "__main__":
     try:
+        ensure_database_exists()
         createTables()
     except Exception as e:
-        print(f"Warning: Could not create database tables: {e}")
-        print("Make sure MySQL server is running and database 'ecommerce1' exists.")
-    
+        print(f"Warning: Could not initialize database: {e}")
+        print("Make sure MySQL server is running and the database user has permission to create databases.")
+
     app.run(debug=True, port=5006)
     
     

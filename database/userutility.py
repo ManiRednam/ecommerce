@@ -83,7 +83,7 @@ def insertCartItem(user_id, product_id, price):
     cursor = db_config.cursor()
 
     query = """
-        INSERT INTO CART (USERID, PRODUCTID, QUANTITY, PRICE)
+        INSERT INTO CART (USER_ID, PRODUCTID, QUANTITY, PRICE)
         VALUES (%s, %s, 1, %s);
     """
 
@@ -110,7 +110,7 @@ def getUserCartItems(user_id):
             (C.QUANTITY * C.PRICE) AS TOTAL_PRICE
         FROM CART C
         JOIN PRODUCTS P ON C.PRODUCTID = P.PRODUCTID
-        WHERE C.USERID = %s;
+        WHERE C.USER_ID = %s;
     """
 
     cursor.execute(query, (user_id,))
@@ -163,7 +163,7 @@ def getProductsBasedOnSearch(product_name:str):
 
     query = """select * from products where name like %s;"""
 
-    cursor.execute(query, (product_name,))
+    cursor.execute(query, (f"%{product_name}%",))
     products = cursor.fetchall()
     cursor.close()
     db_config.close()
@@ -183,7 +183,7 @@ def getCartItems(user_id):
                (p.PRICE * c.QUANTITY) AS TOTAL
         FROM CART c
         JOIN PRODUCTS p ON c.PRODUCTID = p.PRODUCTID
-        WHERE c.USERID = %s
+        WHERE c.USER_ID = %s
     """
 
     cursor.execute(query, (user_id,))
@@ -196,30 +196,21 @@ def getCartItems(user_id):
     return total_amount, cart_items
 
 
-def placeOrder(user_id, fullname, phone, address, city, pincode, total_amount, cart_items):
+def createPendingOrder(user_id, fullname, phone, address, city, pincode, total_amount, cart_items, payment_method='COD'):
     db = databaseConfig()
     cursor = db.cursor(dictionary=True)
 
-    # Get cart items
     cursor.execute("""
-        SELECT PRODUCTID, QUANTITY
-        FROM CART
-        WHERE USER_ID = %s
-    """, (user_id,))
-
-    cart_items1 = cursor.fetchall()
-
-    # Insert Order
-    cursor.execute("""
-        INSERT INTO ORDERS (USER_ID, FULLNAME, PHONE, ADDRESS, CITY, PINCODE,TOTAL_AMOUNT)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (user_id, fullname, phone, address, city, pincode, total_amount))
+        INSERT INTO ORDERS (
+            USER_ID, FULLNAME, PHONE, ADDRESS, CITY, PINCODE, TOTAL_AMOUNT,
+            PAYMENT_METHOD, PAYMENT_STATUS, ORDERSTATUS
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'PENDING', 'PENDING')
+    """, (user_id, fullname, phone, address, city, pincode, total_amount, payment_method))
 
     order_id = cursor.lastrowid
 
-    # Insert Order Items
     for item in cart_items:
-        # print(item)
         cursor.execute("""
             INSERT INTO ORDER_ITEMS
             (ORDERID, PRODUCTID, PRODUCTNAME, PRODUCTPRICE, QUANTITY)
@@ -232,18 +223,68 @@ def placeOrder(user_id, fullname, phone, address, city, pincode, total_amount, c
             item["QUANTITY"]
         ))
 
-    # Clear Cart
-    cursor.execute("DELETE FROM CART WHERE USER_ID=%s", (user_id,))
-    # reduce the each product quantity
+    db.commit()
+    cursor.close()
+    db.close()
+    return order_id
+
+
+def finalizePaidOrder(order_id, user_id, cart_items):
+    db = databaseConfig()
+    cursor = db.cursor(dictionary=True)
+
     for item in cart_items:
-        cursor.execute("select STOCK from products where productid = %s",(item["PRODUCTID"],))
+        cursor.execute("SELECT STOCK FROM products WHERE PRODUCTID = %s", (item["PRODUCTID"],))
         current_quantity = cursor.fetchone()['STOCK']
         if current_quantity >= item["QUANTITY"]:
-            cursor.execute('update products set STOCK = STOCK - %s WHERE PRODUCTID = %s',(item["QUANTITY"],item["PRODUCTID"]))
+            cursor.execute('UPDATE products SET STOCK = STOCK - %s WHERE PRODUCTID = %s', (item["QUANTITY"], item["PRODUCTID"]))
         else:
             cursor.close()
             db.close()
-            return False,f"{item['NAME']} avalilabe quantity is {current_quantity}"
+            return False, f"{item['NAME']} available quantity is {current_quantity}"
+
+    cursor.execute("UPDATE ORDERS SET PAYMENT_STATUS = 'SUCCESS', ORDERSTATUS = 'PAID' WHERE ORDERID = %s", (order_id,))
+    cursor.execute("DELETE FROM CART WHERE USER_ID = %s", (user_id,))
+    db.commit()
+    cursor.close()
+    db.close()
+    return True, "Success"
+
+
+def placeOrder(user_id, fullname, phone, address, city, pincode, total_amount, cart_items, payment_method='COD'):
+    db = databaseConfig()
+    cursor = db.cursor(dictionary=True)
+
+    cursor.execute("""
+        INSERT INTO ORDERS (USER_ID, FULLNAME, PHONE, ADDRESS, CITY, PINCODE, TOTAL_AMOUNT, PAYMENT_METHOD, PAYMENT_STATUS, ORDERSTATUS)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'SUCCESS', 'PAID')
+    """, (user_id, fullname, phone, address, city, pincode, total_amount, payment_method))
+
+    order_id = cursor.lastrowid
+
+    for item in cart_items:
+        cursor.execute("""
+            INSERT INTO ORDER_ITEMS
+            (ORDERID, PRODUCTID, PRODUCTNAME, PRODUCTPRICE, QUANTITY)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (
+            order_id,
+            item["PRODUCTID"],
+            item["NAME"],
+            item["PRICE"],
+            item["QUANTITY"]
+        ))
+
+    cursor.execute("DELETE FROM CART WHERE USER_ID=%s", (user_id,))
+    for item in cart_items:
+        cursor.execute("SELECT STOCK FROM products WHERE PRODUCTID = %s", (item["PRODUCTID"],))
+        current_quantity = cursor.fetchone()['STOCK']
+        if current_quantity >= item["QUANTITY"]:
+            cursor.execute('UPDATE products SET STOCK = STOCK - %s WHERE PRODUCTID = %s', (item["QUANTITY"], item["PRODUCTID"]))
+        else:
+            cursor.close()
+            db.close()
+            return False, f"{item['NAME']} avalilabe quantity is {current_quantity}"
 
     db.commit()
     cursor.close()

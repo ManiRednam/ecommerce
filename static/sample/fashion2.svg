@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Fashion image 2">
+  <rect width="200" height="200" fill="#f5f3ff"/>
+  <path d="M58 62 L82 42 H118 L142 62 L134 152 H66 Z" fill="#a78bfa"/>
+  <path d="M82 42 L100 76 L118 42" fill="none" stroke="#6d28d9" stroke-width="6" stroke-linecap="round"/>
+  <text x="100" y="172" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#4c1d95">Style</text>
+</svg>

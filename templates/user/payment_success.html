@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Payment Successful</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .card {
+            width: 420px;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            padding: 32px;
+            text-align: center;
+        }
+        .badge {
+            width: 72px;
+            height: 72px;
+            margin: 0 auto 20px;
+            border-radius: 50%;
+            background: #2ecc71;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            font-weight: bold;
+        }
+        h2 { margin-bottom: 12px; }
+        p { color: #555; margin-bottom: 18px; }
+        a {
+            display: inline-block;
+            padding: 10px 18px;
+            background: #2ecc71;
+            color: #fff;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="badge">✓</div>
+        <h2>Payment Successful</h2>
+        <p>Your order has been placed successfully and the payment was verified.</p>
+        {% if order_id %}
+        <p><strong>Order ID:</strong> {{ order_id }}</p>
+        {% endif %}
+        <a href="{{ url_for('user') }}">Go to Home</a>
+    </div>
+</body>
+</html>

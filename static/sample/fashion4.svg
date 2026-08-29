@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Fashion image 4">
+  <rect width="200" height="200" fill="#fef2f2"/>
+  <path d="M60 60 L90 40 H110 L140 60 L130 154 H70 Z" fill="#fb7185"/>
+  <path d="M90 40 L100 78 L110 40" fill="none" stroke="#9f1239" stroke-width="6" stroke-linecap="round"/>
+  <text x="100" y="172" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#881337">Wear</text>
+</svg>

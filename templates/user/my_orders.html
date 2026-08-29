@@ -71,21 +71,25 @@
 
             <p>
                 <strong>Payment:</strong>
-                {% if order.PAYMENT_STATUS == 'Paid' %}
+                {% if order.PAYMENT_STATUS == 'SUCCESS' %}
                     <span style="color:green;">Paid</span>
+                {% elif order.PAYMENT_STATUS == 'FAILED' %}
+                    <span style="color:red;">Failed</span>
+                {% elif order.PAYMENT_STATUS == 'CANCELLED' %}
+                    <span style="color:orange;">Cancelled</span>
                 {% else %}
-                    <span style="color:red;">Pending</span>
+                    <span style="color:orange;">Pending</span>
                 {% endif %}
             </p>
 
             <p class="order-status 
-                {% if order.ORDER_STATUS == 'Pending' %}status-pending
-                {% elif order.ORDER_STATUS == 'Paid' %}status-paid
-                {% elif order.ORDER_STATUS == 'Shipped' %}status-shipped
-                {% elif order.ORDER_STATUS == 'Delivered' %}status-delivered
+                {% if order.ORDERSTATUS == 'PENDING' %}status-pending
+                {% elif order.ORDERSTATUS == 'PAID' %}status-paid
+                {% elif order.ORDERSTATUS == 'SHIPPED' %}status-shipped
+                {% elif order.ORDERSTATUS == 'DELIVERED' %}status-delivered
                 {% endif %}
             ">
-                Order Status: {{ order.ORDER_STATUS }}
+                Order Status: {{ order.ORDERSTATUS or 'PENDING' }}
             </p>
 
             

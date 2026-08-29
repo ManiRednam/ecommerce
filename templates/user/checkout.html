@@ -152,7 +152,7 @@
     <div class="address-section">
         <h3>Shipping Address</h3>
 
-        <form method="POST" action="{{ url_for('place_order') }}">
+        <form id="checkout-form" method="POST" action="{{ url_for('place_order') }}">
 
             <div class="row">
                 <div class="form-group">
@@ -183,7 +183,15 @@
                 </div>
             </div>
 
-            <button type="submit" class="place-order-btn">
+            <div class="form-group">
+                <label>Payment Method</label>
+                <select name="payment_method" id="payment_method" style="padding:10px; border-radius:6px; border:1px solid #ccc;">
+                    <option value="COD">Cash on Delivery</option>
+                    <option value="RAZORPAY">Pay with Razorpay</option>
+                </select>
+            </div>
+
+            <button type="submit" class="place-order-btn" id="place-order-btn">
                 Place Order
             </button>
 
@@ -192,6 +200,86 @@
 
 </div>
 
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+    const checkoutForm = document.getElementById('checkout-form');
+    const paymentMethodSelect = document.getElementById('payment_method');
+    const placeOrderButton = document.getElementById('place-order-btn');
+
+    checkoutForm.addEventListener('submit', async function (event) {
+        event.preventDefault();
+
+        if (paymentMethodSelect.value !== 'RAZORPAY') {
+            checkoutForm.submit();
+            return;
+        }
+
+        placeOrderButton.disabled = true;
+        placeOrderButton.textContent = 'Processing...';
+
+        const formData = new FormData(checkoutForm);
+
+        try {
+            const response = await fetch('{{ url_for("create_razorpay_order_route") }}', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Unable to create Razorpay order.');
+            }
+
+            const razorpayOptions = {
+                key: data.key,
+                amount: data.amount,
+                currency: data.currency,
+                name: data.name,
+                description: data.description,
+                order_id: data.razorpay_order_id,
+                handler: async function (paymentResponse) {
+                    const verifyResponse = await fetch('{{ url_for("payment_verify") }}', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            order_id: data.order_id,
+                            razorpay_order_id: paymentResponse.razorpay_order_id,
+                            razorpay_payment_id: paymentResponse.razorpay_payment_id,
+                            razorpay_signature: paymentResponse.razorpay_signature
+                        })
+                    });
+
+                    const verifyData = await verifyResponse.json();
+
+                    if (verifyResponse.ok) {
+                        window.location.href = '{{ url_for("payment_success") }}?order_id=' + data.order_id;
+                    } else {
+                        window.location.href = '{{ url_for("payment_failure") }}?order_id=' + data.order_id;
+                    }
+                },
+                prefill: data.prefill,
+                theme: {
+                    color: '#2ecc71'
+                },
+                modal: {
+                    ondismiss: function () {
+                        window.location.href = '{{ url_for("payment_cancelled") }}?order_id=' + data.order_id;
+                    }
+                }
+            };
+
+            const rzp = new Razorpay(razorpayOptions);
+            rzp.open();
+        } catch (error) {
+            alert(error.message);
+            placeOrderButton.disabled = false;
+            placeOrderButton.textContent = 'Place Order';
+        }
+    });
+</script>
 
 </body>
 </html>

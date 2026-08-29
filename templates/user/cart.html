@@ -37,7 +37,7 @@
                         {% if item.IMAGE_URL %}
                             <img src="{{ url_for('static', filename=item.IMAGE_URL) }}" width="60">
                         {% else %}
-                            <img src="{{ url_for('static', filename='images/no-image.png') }}" width="60">
+                            <img src="{{ url_for('static', filename='images/no-image.svg') }}" width="60" alt="No image available">
                         {% endif %}
 
                     </td>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Tent illustration">
+  <rect width="200" height="200" fill="#f0fdf4"/>
+  <path d="M42 138 L100 56 L158 138 Z" fill="#4ade80"/>
+  <path d="M72 138 L100 90 L128 138 Z" fill="#bbf7d0"/>
+  <path d="M50 138 H150" stroke="#166534" stroke-width="8" stroke-linecap="round"/>
+  <text x="100" y="170" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#14532d">Tent</text>
+</svg>

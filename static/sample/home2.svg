@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Home decor image 2">
+  <rect width="200" height="200" fill="#ecfccb"/>
+  <rect x="48" y="72" width="104" height="58" rx="8" fill="#65a30d"/>
+  <path d="M42 80 L100 38 L158 80" fill="none" stroke="#365314" stroke-width="8" stroke-linecap="round"/>
+  <rect x="84" y="92" width="32" height="38" rx="6" fill="#dcfce7"/>
+  <text x="100" y="170" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="700" fill="#365314">Home</text>
+</svg>

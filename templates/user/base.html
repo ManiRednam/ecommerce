@@ -24,7 +24,10 @@
     <header class="navbar">
 
         <div class="logo">
-            <a href="{{ url_for('user') }}">Ecommerce</a>
+            <a href="{{ url_for('user') }}">
+                <img src="{{ url_for('static', filename='images/logo.svg') }}" alt="Ecommerce logo" style="height: 36px; width: auto; vertical-align: middle;">
+                <span style="margin-left: 8px;">Ecommerce</span>
+            </a>
         </div>
 
         <form action="{{ url_for('search') }}" method="GET" class="search-bar">

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Shoes illustration">
+  <rect width="200" height="200" fill="#e0f2fe"/>
+  <path d="M30 120 L144 120 L170 148 H30 Z" fill="#38bdf8"/>
+  <path d="M52 88 L100 88 L126 120 H48 Z" fill="#7dd3fc"/>
+  <path d="M78 72 L93 88 H62 Z" fill="#bae6fd"/>
+  <text x="100" y="170" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" fill="#0c4a6e">Shoes</text>
+</svg>
