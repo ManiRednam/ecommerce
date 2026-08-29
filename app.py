@@ -831,7 +831,12 @@ def user_logout():
 
 # main
 if __name__ == "__main__":
-    createTables()
+    try:
+        createTables()
+    except Exception as e:
+        print(f"Warning: Could not create database tables: {e}")
+        print("Make sure MySQL server is running and database 'ecommerce1' exists.")
+    
     app.run(debug=True, port=5006)
     
     
