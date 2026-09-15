@@ -50,11 +50,8 @@ category_products.html
 
         <div class="product-grid">
             {% for product in products %}
-             <a href="{{ url_for('user_product_details',category= product.CATEGORY , productid=product.PRODUCTID) }}" 
-                class="product-card-link">
-
-                    <div class="product-card">
-                        
+                <div class="product-card">
+                    <a href="{{ url_for('user_product_details',category= product.CATEGORY , productid=product.PRODUCTID) }}" class="product-card-link">
                         {% if product.IMAGE_URL %}
                             <img src="{{ url_for('static', filename=product.IMAGE_URL) }}"
                                 alt="{{ product.NAME }}">
@@ -62,8 +59,6 @@ category_products.html
                             <img src="{{ url_for('static', filename='images/no-image.svg') }}"
                                 alt="No Image">
                         {% endif %}
-
-                        
 
                         <div class="product-info">
                             <h4 class="product-name">{{ product.NAME }}</h4>
@@ -76,19 +71,15 @@ category_products.html
 
                             <p class="price">₹{{ product.PRICE }}</p>
                         </div>
-                        <div>
-                            <form method="POST" action="{{ url_for('add_to_cart') }}">
-                            <input type="hidden" name="product_id" value="{{ product.PRODUCTID }}">
-                            
-                            <button type="submit" class="cart-btn">
-                                🛒 Add to Cart
-                            </button>
-                            </form>
-                        </div>
+                    </a>
 
-
-                    </div>
-                </a>
+                    <form method="POST" action="{{ url_for('add_to_cart') }}" class="cart-form">
+                        <input type="hidden" name="product_id" value="{{ product.PRODUCTID }}">
+                        <button type="submit" class="cart-btn">
+                            🛒 Add to Cart
+                        </button>
+                    </form>
+                </div>
             {% else %}
             <p class="no-products">No products found.</p>
             {% endfor %}

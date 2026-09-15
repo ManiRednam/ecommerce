@@ -433,8 +433,8 @@ def adminorders():
     # print(orders[:3])
 
     return render_template('admin/orders.html',
-                            total_orders = orders_count,
-                            filtred_order_count=filter_orders_count,
+                            total_orders=orders_count,
+                            filtered_order_count=filter_orders_count,
                             orders=orders)
 
 
@@ -445,7 +445,7 @@ def view_order(order_id):
     order, items = viewOrderDetails(order_id)
 
     return render_template(
-        'admin/view_order.html',
+        'admin/view_orders.html',
         order=order,
         items=items
     )
@@ -694,13 +694,14 @@ def add_to_cart():
 @token_required(role='user')
 def view_cart():
     user = getUserByToken()
-    name = user.get('NAME','Dear User')
-    
-    user_id = user['USERID']  # adjust if needed
+    if not user:
+        flash('Please login to view your cart.', 'warning')
+        return redirect(url_for('login'))
+
+    name = user.get('NAME', 'Dear User')
+    user_id = user.get('USERID') or user.get('USER_ID') or user.get('user_id')
 
     cart_items = getUserCartItems(user_id)
-
-    # Calculate grand total
     grand_total = sum(item['TOTAL_PRICE'] for item in cart_items)
 
     return render_template(
@@ -749,10 +750,10 @@ def user_orders():
     return "Users orders page"
 
 # cart route
-@token_required(role='user')
 @app.route('/user/cart')
+@token_required(role='user')
 def user_cart():
-    return "user cart page"
+    return redirect(url_for('view_cart'))
 
 
 # -------------------place order related --------------------------

@@ -223,7 +223,7 @@ def getOrders(orderid="", product_name="", from_date="", to_date=""):
     query = """
         SELECT 
             o.ORDERID AS ORDER_ID,
-            o.USERID AS USER_ID,
+            o.USER_ID AS USER_ID,
             o.CREATED_AT,
             o.ORDERSTATUS AS ORDER_STATUS,
 

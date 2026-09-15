@@ -171,13 +171,13 @@ th { background: #f9fafb; }
 <!-- SIDEBAR -->
 <div class="sidebar">
     <h2>Admin Panel</h2>
-    <a href="{{ url_for('products') }}"> Products</a>
-    <a href="{{ url_for('addproduct') }}">Add Product</a>
-    <a href="{{ url_for('adminusers') }}">Delete Product</a>
-    <a href="{{ url_for('orders') }}"> Orders</a>
-    <a href="{{ url_for('profile') }}">profile</a>
+    <a href="{{ url_for('adminproducts') }}"> Products</a>
+    <a href="{{ url_for('adminaddproduct') }}">Add Product</a>
+    <a href="{{ url_for('adminusers') }}">Users</a>
+    <a href="{{ url_for('adminorders') }}"> Orders</a>
+    <a href="{{ url_for('adminprofile') }}">profile</a>
     <a href="#">Settings</a>
-    <a href="#">Logout</a>
+    <a href="{{ url_for('adminlogout') }}">Logout</a>
 </div>
 
 <!-- MAIN -->
