@@ -19,6 +19,7 @@ from database.userutility import createPendingOrder, finalizePaidOrder
 from services.razorpay_service import create_payment_order, verify_payment_signature
 
 from database.connection import ensure_database_exists
+from database.demo_catalog import seed_demo_catalog
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')
@@ -115,8 +116,12 @@ def getUserByToken():
 # index route
 @app.route('/')
 def index():
-    return render_template('user/user_home.html',
-                            user_logged_in=False)
+    try:
+        featured_products = getProductsFromDB(status='1')[:8]
+    except Exception:
+        featured_products = []
+    return render_template('user/user_home.html', user_logged_in=False,
+                           featured_products=featured_products)
 
 
 # login route
@@ -589,9 +594,9 @@ def user():
     user = getUserByToken()
     name = user.get('NAME','Dear User')
     # print(user)
-    return render_template('user/user_home.html',
-                            user_logged_in=True,
-                            username=name)
+    products = getProductsFromDB(status='1')[:8]
+    return render_template('user/user_home.html', user_logged_in=True,
+                            username=name, featured_products=products)
 
 #User dashboard route
 
@@ -651,8 +656,15 @@ def category_products(category_name):
     )
 # user product details 
 @app.route('/user/products/<category>/<productid>')
-def user_product_details(category_name, product_id):
-    return "Product Info"
+def user_product_details(category, productid):
+    product = getProductById(productid)
+    if not product or not product.get('ACTIVE'):
+        flash('That product is currently unavailable.', 'warning')
+        return redirect(url_for('category_products', category_name=category))
+    user = getUserByToken()
+    return render_template('user/product_detail.html', product=product,
+                           user_logged_in=bool(user),
+                           username=user.get('NAME') if user else None)
 # categories route
 @token_required(role='user')
 @app.route('/user/categories')
@@ -764,6 +776,9 @@ def checkout():
     user = getUserByToken()   # from your token decorator
     name = user.get('NAME','Dear User')
     total_amount, cart_items = getCartItems(user['USERID'])
+    if not cart_items:
+        flash('Your cart is empty. Add something before checkout.', 'warning')
+        return redirect(url_for('view_cart'))
 
     return render_template(
         "user/checkout.html",
@@ -789,8 +804,10 @@ def place_order():
     pincode = request.form['pincode']
     payment_method = request.form.get('payment_method', 'COD').upper()
 
-    if payment_method == 'RAZORPAY':
-        payment_method = 'RAZORPAY'
+    # Online orders must go through the signed Razorpay verification endpoint.
+    if payment_method != 'COD':
+        flash('Please use the secure payment checkout for online payments.', 'danger')
+        return redirect(url_for('checkout'))
 
     status, msg = placeOrder(user['USERID'], fullname, phone, address, city, pincode, total_amount, cart_items, payment_method)
     if not status:
@@ -825,6 +842,9 @@ def create_razorpay_order_route():
         return jsonify({'error': 'Your cart is empty'}), 400
 
     try:
+        if not os.getenv('RAZORPAY_KEY_ID') or not os.getenv('RAZORPAY_KEY_SECRET'):
+            return jsonify({'error': 'Online payments are not configured yet. Choose Cash on Delivery or contact the store owner.'}), 503
+
         order_id = createPendingOrder(
             user_id=user['USERID'],
             fullname=fullname,
@@ -887,6 +907,10 @@ def payment_verify():
         return jsonify({'error': 'Order not found'}), 404
     if order['USER_ID'] != user['USERID']:
         return jsonify({'error': 'Order does not belong to this user'}), 403
+    if order.get('PAYMENT_STATUS') == 'SUCCESS':
+        return jsonify({'error': 'This order has already been paid.'}), 409
+    if order.get('RAZORPAY_ORDER_ID') != razorpay_order_id:
+        return jsonify({'error': 'Payment order does not match this checkout.'}), 400
 
     try:
         is_valid = verify_payment_signature(razorpay_order_id, razorpay_payment_id, razorpay_signature)
@@ -1030,6 +1054,7 @@ if __name__ == "__main__":
     try:
         ensure_database_exists()
         createTables()
+        seed_demo_catalog()
     except Exception as e:
         print(f"Warning: Could not initialize database: {e}")
         print("Make sure MySQL server is running and the database user has permission to create databases.")

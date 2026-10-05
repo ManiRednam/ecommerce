@@ -11,7 +11,9 @@
 <!-- ================= HERO SECTION ================= -->
 <section class="hero">
     <div class="hero-text">
-        <h1>Great Deals and Offers!</h1>
+        <p class="hero-kicker">A little better, every day</p>
+        <h1>Good finds for your everyday.</h1>
+        <p class="hero-copy">Shop thoughtful picks for home, work and weekends, with clear prices and easy checkout.</p>
         <div class="hero-buttons">
             <a href="{{ url_for('category_products', category_name='Electronics') }}" class="btn-primary">
                 Shop Now
@@ -20,6 +22,32 @@
                 View Cart
             </a>
         </div>
+    </div>
+</section>
+
+<section class="featured-section">
+    <div class="featured-heading">
+        <div><p class="hero-kicker">THE EVERYDAY EDIT</p><h2>Popular picks</h2></div>
+        <a href="{{ url_for('category_products', category_name='Electronics') }}">Explore the shop <span aria-hidden="true">→</span></a>
+    </div>
+    <div class="featured-grid">
+        {% for product in featured_products|default([]) %}
+        <article class="featured-card">
+            <a class="featured-image" href="{{ url_for('category_products', category_name=product.CATEGORY) }}">
+                <img src="{{ url_for('static', filename=product.IMAGE_URL) if product.IMAGE_URL else url_for('static', filename='images/no-image.svg') }}" alt="{{ product.NAME }}">
+            </a>
+            <div class="featured-info">
+                <span class="featured-category">{{ product.CATEGORY }}</span>
+                <h3>{{ product.NAME }}</h3>
+                <p>{{ product.DESCRIPTION or '' }}</p>
+                <div class="featured-buy"><strong>₹{{ '%.2f'|format(product.PRICE|float) }}</strong>
+                    <a href="{{ url_for('category_products', category_name=product.CATEGORY) }}" aria-label="Shop {{ product.NAME }}">View item <span aria-hidden="true">→</span></a>
+                </div>
+            </div>
+        </article>
+        {% else %}
+        <div class="catalog-empty"><h3>Your next good find is waiting.</h3><p>Run the app to initialize the demo catalog, or add products from the admin dashboard.</p></div>
+        {% endfor %}
     </div>
 </section>
 
